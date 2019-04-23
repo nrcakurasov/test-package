@@ -1,1 +1,1 @@
-export declare const Greeter: (name: string) => string;
+export { VerticalBarChart } from './charts/vertical-bar-chart/vetical-bar-chart';

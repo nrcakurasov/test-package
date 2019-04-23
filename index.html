@@ -1,0 +1,39 @@
+<html>
+        <script src="dist/bundle.js"></script>
+        <link rel="stylesheet" href="dist/bundle.css"></link>
+ <div>
+     <h3>Charts</h3>
+     <h4>VerticalBarChart</h4>
+     <div id="verticalBarChart"></div>
+     <h4>MultilineChart</h4>
+     <div id="multilineChart"></div>
+ </div>
+<script>
+    
+// vertical bar chart
+var verticalBarChartData = [
+        { valueX: 1, valueY: 2, labelX: 'Top Label', labelY: 'label 1', tooltip: { html: 'label 1' }  },
+        { valueX: 2, valueY: 1, labelX: 'Top Label', labelY: 'Looooooooooooooooooooooooooooooong label', tooltip: { 
+                                                                                                        html: ' Loooooooooooooooooooooooooooong label ',
+                                                                                                    width:300 }  },
+        { valueX: 2, valueY: 3, labelX: 'Top Label', labelY: 'label 2', tooltip: { html: 'label 2' }  },
+];
+var verticalBarChartConfig = 
+    {container: '#verticalBarChart',
+        data: verticalBarChartData,
+        chartWidth: 560,
+        chartHeight: 146
+    };
+
+var verticalBarChart  = new zippyCharts.VerticalBarChart(verticalBarChartConfig);
+
+
+// multiline chart
+//.....
+
+
+</script>    
+ </body>
+
+
+</html>

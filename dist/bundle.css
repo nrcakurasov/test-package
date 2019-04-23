@@ -1,0 +1,29 @@
+div.zippy-chart-tooltip {
+  position: absolute;
+  text-align: left;
+  min-width: 10px;
+  min-height: 28px;
+  padding: 10px;
+  font: 12px sans-serif;
+  border-radius: 1px;
+  pointer-events: none;
+  z-index: 11;
+  background-color: #fff;
+  border: 1px solid #dbdbdb;
+  color: #4a4a4a;
+  box-shadow: 0 2px 4px 0 rgba(0, 0, 0, 0.2);
+  border-bottom: 1px solid #cbcbcb; }
+
+.zippy-chart {
+  position: relative;
+  box-sizing: border-box;
+  color: #fff;
+  user-select: none; }
+  .zippy-chart .vertical-bar-chart .label {
+    font-family: "Lucida Grande","Open Sans",sans-serif;
+    font-size: 12px;
+    fill: #4a4a4a; }
+  .zippy-chart .vertical-bar-chart .sub-label {
+    font-family: "Lucida Grande","Open Sans",sans-serif;
+    font-size: 11px;
+    fill: #9a9a9a; }

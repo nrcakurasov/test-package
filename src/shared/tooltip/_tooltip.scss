@@ -1,0 +1,17 @@
+div.zippy-chart-tooltip {
+    position: absolute;
+    text-align: left;
+    min-width: 10px;
+    min-height: 28px;
+    padding: 10px;
+    font: 12px sans-serif;
+    border-radius: 1px;
+    pointer-events: none;
+    z-index: 11;
+    background-color: $color-white;
+    border: 1px solid $color-light-grey;
+    color: $color-grey-basic;
+    box-shadow: $box-shadow-2;
+    border-bottom: 1px solid #cbcbcb;
+  }
+  

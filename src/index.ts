@@ -1,1 +1,1 @@
-export const Greeter = (name: string) => `Hello ${name}`; 
+export { VerticalBarChart } from './charts/vertical-bar-chart/vetical-bar-chart';
