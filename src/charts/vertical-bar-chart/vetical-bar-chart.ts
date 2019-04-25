@@ -14,7 +14,8 @@ export class VerticalBarChart {
     {container: '',
       data: [],
       chartWidth: 960,
-      chartHeight: 146};
+      chartHeight: 146,
+      loading: false};
 
       private config: IVerticalBarChartConfigModel = this.defaultConfig;
   
@@ -23,7 +24,6 @@ export class VerticalBarChart {
   private yLabelsWidth: number = 230;
   private withYLabels: boolean = true;
   private chartId: string = 'verticalbarchart';
-  private loading: boolean = false;
   private xDomainMin: number = 0;
   private xDomainMax: number = 0;
 
@@ -31,7 +31,7 @@ export class VerticalBarChart {
   private dataInternal: IVerticalBarChartModel[];
 
   constructor(config: IVerticalBarChartConfigModel) {
-
+    
 
     this.config =  merge(this.config, config);
     console.log(this.config);
@@ -47,7 +47,7 @@ export class VerticalBarChart {
 
     d3.selectAll(`div.zippy-chart-tooltip ${this.chartId}`).remove();
     d3.select(this.container)
-        .transition().duration(100).style('opacity', this.loading ? '0.5' : '1');
+        .transition().duration(100).style('opacity', this.config.loading ? '0.5' : '1');
 
     this.redraw();
   }

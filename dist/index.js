@@ -43,6 +43,44 @@ function ascendingComparator(f) {
 var ascendingBisect = bisector(ascending);
 var bisectRight = ascendingBisect.right;
 
+function extent(values, valueof) {
+  var n = values.length,
+      i = -1,
+      value,
+      min,
+      max;
+
+  if (valueof == null) {
+    while (++i < n) { // Find the first comparable value.
+      if ((value = values[i]) != null && value >= value) {
+        min = max = value;
+        while (++i < n) { // Compare the remaining values.
+          if ((value = values[i]) != null) {
+            if (min > value) min = value;
+            if (max < value) max = value;
+          }
+        }
+      }
+    }
+  }
+
+  else {
+    while (++i < n) { // Find the first comparable value.
+      if ((value = valueof(values[i], i, values)) != null && value >= value) {
+        min = max = value;
+        while (++i < n) { // Compare the remaining values.
+          if ((value = valueof(values[i], i, values)) != null) {
+            if (min > value) min = value;
+            if (max < value) max = value;
+          }
+        }
+      }
+    }
+  }
+
+  return [min, max];
+}
+
 function sequence(start, stop, step) {
   start = +start, stop = +stop, step = (n = arguments.length) < 2 ? (stop = start, start = 0, 1) : n < 3 ? 1 : +step;
 
@@ -142,6 +180,211 @@ function max(values, valueof) {
   }
 
   return max;
+}
+
+function min(values, valueof) {
+  var n = values.length,
+      i = -1,
+      value,
+      min;
+
+  if (valueof == null) {
+    while (++i < n) { // Find the first comparable value.
+      if ((value = values[i]) != null && value >= value) {
+        min = value;
+        while (++i < n) { // Compare the remaining values.
+          if ((value = values[i]) != null && min > value) {
+            min = value;
+          }
+        }
+      }
+    }
+  }
+
+  else {
+    while (++i < n) { // Find the first comparable value.
+      if ((value = valueof(values[i], i, values)) != null && value >= value) {
+        min = value;
+        while (++i < n) { // Compare the remaining values.
+          if ((value = valueof(values[i], i, values)) != null && min > value) {
+            min = value;
+          }
+        }
+      }
+    }
+  }
+
+  return min;
+}
+
+var slice = Array.prototype.slice;
+
+function identity(x) {
+  return x;
+}
+
+var top = 1,
+    right = 2,
+    bottom = 3,
+    left = 4,
+    epsilon = 1e-6;
+
+function translateX(x) {
+  return "translate(" + (x + 0.5) + ",0)";
+}
+
+function translateY(y) {
+  return "translate(0," + (y + 0.5) + ")";
+}
+
+function number(scale) {
+  return function(d) {
+    return +scale(d);
+  };
+}
+
+function center(scale) {
+  var offset = Math.max(0, scale.bandwidth() - 1) / 2; // Adjust for 0.5px offset.
+  if (scale.round()) offset = Math.round(offset);
+  return function(d) {
+    return +scale(d) + offset;
+  };
+}
+
+function entering() {
+  return !this.__axis;
+}
+
+function axis(orient, scale) {
+  var tickArguments = [],
+      tickValues = null,
+      tickFormat = null,
+      tickSizeInner = 6,
+      tickSizeOuter = 6,
+      tickPadding = 3,
+      k = orient === top || orient === left ? -1 : 1,
+      x = orient === left || orient === right ? "x" : "y",
+      transform = orient === top || orient === bottom ? translateX : translateY;
+
+  function axis(context) {
+    var values = tickValues == null ? (scale.ticks ? scale.ticks.apply(scale, tickArguments) : scale.domain()) : tickValues,
+        format = tickFormat == null ? (scale.tickFormat ? scale.tickFormat.apply(scale, tickArguments) : identity) : tickFormat,
+        spacing = Math.max(tickSizeInner, 0) + tickPadding,
+        range = scale.range(),
+        range0 = +range[0] + 0.5,
+        range1 = +range[range.length - 1] + 0.5,
+        position = (scale.bandwidth ? center : number)(scale.copy()),
+        selection = context.selection ? context.selection() : context,
+        path = selection.selectAll(".domain").data([null]),
+        tick = selection.selectAll(".tick").data(values, scale).order(),
+        tickExit = tick.exit(),
+        tickEnter = tick.enter().append("g").attr("class", "tick"),
+        line = tick.select("line"),
+        text = tick.select("text");
+
+    path = path.merge(path.enter().insert("path", ".tick")
+        .attr("class", "domain")
+        .attr("stroke", "currentColor"));
+
+    tick = tick.merge(tickEnter);
+
+    line = line.merge(tickEnter.append("line")
+        .attr("stroke", "currentColor")
+        .attr(x + "2", k * tickSizeInner));
+
+    text = text.merge(tickEnter.append("text")
+        .attr("fill", "currentColor")
+        .attr(x, k * spacing)
+        .attr("dy", orient === top ? "0em" : orient === bottom ? "0.71em" : "0.32em"));
+
+    if (context !== selection) {
+      path = path.transition(context);
+      tick = tick.transition(context);
+      line = line.transition(context);
+      text = text.transition(context);
+
+      tickExit = tickExit.transition(context)
+          .attr("opacity", epsilon)
+          .attr("transform", function(d) { return isFinite(d = position(d)) ? transform(d) : this.getAttribute("transform"); });
+
+      tickEnter
+          .attr("opacity", epsilon)
+          .attr("transform", function(d) { var p = this.parentNode.__axis; return transform(p && isFinite(p = p(d)) ? p : position(d)); });
+    }
+
+    tickExit.remove();
+
+    path
+        .attr("d", orient === left || orient == right
+            ? (tickSizeOuter ? "M" + k * tickSizeOuter + "," + range0 + "H0.5V" + range1 + "H" + k * tickSizeOuter : "M0.5," + range0 + "V" + range1)
+            : (tickSizeOuter ? "M" + range0 + "," + k * tickSizeOuter + "V0.5H" + range1 + "V" + k * tickSizeOuter : "M" + range0 + ",0.5H" + range1));
+
+    tick
+        .attr("opacity", 1)
+        .attr("transform", function(d) { return transform(position(d)); });
+
+    line
+        .attr(x + "2", k * tickSizeInner);
+
+    text
+        .attr(x, k * spacing)
+        .text(format);
+
+    selection.filter(entering)
+        .attr("fill", "none")
+        .attr("font-size", 10)
+        .attr("font-family", "sans-serif")
+        .attr("text-anchor", orient === right ? "start" : orient === left ? "end" : "middle");
+
+    selection
+        .each(function() { this.__axis = position; });
+  }
+
+  axis.scale = function(_) {
+    return arguments.length ? (scale = _, axis) : scale;
+  };
+
+  axis.ticks = function() {
+    return tickArguments = slice.call(arguments), axis;
+  };
+
+  axis.tickArguments = function(_) {
+    return arguments.length ? (tickArguments = _ == null ? [] : slice.call(_), axis) : tickArguments.slice();
+  };
+
+  axis.tickValues = function(_) {
+    return arguments.length ? (tickValues = _ == null ? null : slice.call(_), axis) : tickValues && tickValues.slice();
+  };
+
+  axis.tickFormat = function(_) {
+    return arguments.length ? (tickFormat = _, axis) : tickFormat;
+  };
+
+  axis.tickSize = function(_) {
+    return arguments.length ? (tickSizeInner = tickSizeOuter = +_, axis) : tickSizeInner;
+  };
+
+  axis.tickSizeInner = function(_) {
+    return arguments.length ? (tickSizeInner = +_, axis) : tickSizeInner;
+  };
+
+  axis.tickSizeOuter = function(_) {
+    return arguments.length ? (tickSizeOuter = +_, axis) : tickSizeOuter;
+  };
+
+  axis.tickPadding = function(_) {
+    return arguments.length ? (tickPadding = +_, axis) : tickPadding;
+  };
+
+  return axis;
+}
+
+function axisBottom(scale) {
+  return axis(bottom, scale);
+}
+
+function axisLeft(scale) {
+  return axis(left, scale);
 }
 
 var noop = {value: function() {}};
@@ -1088,6 +1331,32 @@ function select(selector) {
       : new Selection([[selector]], root);
 }
 
+function sourceEvent() {
+  var current = event, source;
+  while (source = current.sourceEvent) current = source;
+  return current;
+}
+
+function point(node, event) {
+  var svg = node.ownerSVGElement || node;
+
+  if (svg.createSVGPoint) {
+    var point = svg.createSVGPoint();
+    point.x = event.clientX, point.y = event.clientY;
+    point = point.matrixTransform(node.getScreenCTM().inverse());
+    return [point.x, point.y];
+  }
+
+  var rect = node.getBoundingClientRect();
+  return [event.clientX - rect.left - node.clientLeft, event.clientY - rect.top - node.clientTop];
+}
+
+function mouse(node) {
+  var event = sourceEvent();
+  if (event.changedTouches) event = event.changedTouches[0];
+  return point(node, event);
+}
+
 function selectAll(selector) {
   return typeof selector === "string"
       ? new Selection([document.querySelectorAll(selector)], [document.documentElement])
@@ -1854,7 +2123,7 @@ function interpolateRound(a, b) {
 
 var degrees = 180 / Math.PI;
 
-var identity = {
+var identity$1 = {
   translateX: 0,
   translateY: 0,
   rotate: 0,
@@ -1885,7 +2154,7 @@ var cssNode,
     svgNode;
 
 function parseCss(value) {
-  if (value === "none") return identity;
+  if (value === "none") return identity$1;
   if (!cssNode) cssNode = document.createElement("DIV"), cssRoot = document.documentElement, cssView = document.defaultView;
   cssNode.style.transform = value;
   value = cssView.getComputedStyle(cssRoot.appendChild(cssNode), null).getPropertyValue("transform");
@@ -1895,10 +2164,10 @@ function parseCss(value) {
 }
 
 function parseSvg(value) {
-  if (value == null) return identity;
+  if (value == null) return identity$1;
   if (!svgNode) svgNode = document.createElementNS("http://www.w3.org/2000/svg", "g");
   svgNode.setAttribute("transform", value);
-  if (!(value = svgNode.transform.baseVal.consolidate())) return identity;
+  if (!(value = svgNode.transform.baseVal.consolidate())) return identity$1;
   value = value.matrix;
   return decompose(value.a, value.b, value.c, value.d, value.e, value.f);
 }
@@ -2945,7 +3214,134 @@ selection.prototype.transition = selection_transition;
 
 var pi$1 = Math.PI;
 
-var pi$2 = Math.PI;
+var pi$2 = Math.PI,
+    tau$1 = 2 * pi$2,
+    epsilon$1 = 1e-6,
+    tauEpsilon = tau$1 - epsilon$1;
+
+function Path() {
+  this._x0 = this._y0 = // start of current subpath
+  this._x1 = this._y1 = null; // end of current subpath
+  this._ = "";
+}
+
+function path() {
+  return new Path;
+}
+
+Path.prototype = path.prototype = {
+  constructor: Path,
+  moveTo: function(x, y) {
+    this._ += "M" + (this._x0 = this._x1 = +x) + "," + (this._y0 = this._y1 = +y);
+  },
+  closePath: function() {
+    if (this._x1 !== null) {
+      this._x1 = this._x0, this._y1 = this._y0;
+      this._ += "Z";
+    }
+  },
+  lineTo: function(x, y) {
+    this._ += "L" + (this._x1 = +x) + "," + (this._y1 = +y);
+  },
+  quadraticCurveTo: function(x1, y1, x, y) {
+    this._ += "Q" + (+x1) + "," + (+y1) + "," + (this._x1 = +x) + "," + (this._y1 = +y);
+  },
+  bezierCurveTo: function(x1, y1, x2, y2, x, y) {
+    this._ += "C" + (+x1) + "," + (+y1) + "," + (+x2) + "," + (+y2) + "," + (this._x1 = +x) + "," + (this._y1 = +y);
+  },
+  arcTo: function(x1, y1, x2, y2, r) {
+    x1 = +x1, y1 = +y1, x2 = +x2, y2 = +y2, r = +r;
+    var x0 = this._x1,
+        y0 = this._y1,
+        x21 = x2 - x1,
+        y21 = y2 - y1,
+        x01 = x0 - x1,
+        y01 = y0 - y1,
+        l01_2 = x01 * x01 + y01 * y01;
+
+    // Is the radius negative? Error.
+    if (r < 0) throw new Error("negative radius: " + r);
+
+    // Is this path empty? Move to (x1,y1).
+    if (this._x1 === null) {
+      this._ += "M" + (this._x1 = x1) + "," + (this._y1 = y1);
+    }
+
+    // Or, is (x1,y1) coincident with (x0,y0)? Do nothing.
+    else if (!(l01_2 > epsilon$1));
+
+    // Or, are (x0,y0), (x1,y1) and (x2,y2) collinear?
+    // Equivalently, is (x1,y1) coincident with (x2,y2)?
+    // Or, is the radius zero? Line to (x1,y1).
+    else if (!(Math.abs(y01 * x21 - y21 * x01) > epsilon$1) || !r) {
+      this._ += "L" + (this._x1 = x1) + "," + (this._y1 = y1);
+    }
+
+    // Otherwise, draw an arc!
+    else {
+      var x20 = x2 - x0,
+          y20 = y2 - y0,
+          l21_2 = x21 * x21 + y21 * y21,
+          l20_2 = x20 * x20 + y20 * y20,
+          l21 = Math.sqrt(l21_2),
+          l01 = Math.sqrt(l01_2),
+          l = r * Math.tan((pi$2 - Math.acos((l21_2 + l01_2 - l20_2) / (2 * l21 * l01))) / 2),
+          t01 = l / l01,
+          t21 = l / l21;
+
+      // If the start tangent is not coincident with (x0,y0), line to.
+      if (Math.abs(t01 - 1) > epsilon$1) {
+        this._ += "L" + (x1 + t01 * x01) + "," + (y1 + t01 * y01);
+      }
+
+      this._ += "A" + r + "," + r + ",0,0," + (+(y01 * x20 > x01 * y20)) + "," + (this._x1 = x1 + t21 * x21) + "," + (this._y1 = y1 + t21 * y21);
+    }
+  },
+  arc: function(x, y, r, a0, a1, ccw) {
+    x = +x, y = +y, r = +r;
+    var dx = r * Math.cos(a0),
+        dy = r * Math.sin(a0),
+        x0 = x + dx,
+        y0 = y + dy,
+        cw = 1 ^ ccw,
+        da = ccw ? a0 - a1 : a1 - a0;
+
+    // Is the radius negative? Error.
+    if (r < 0) throw new Error("negative radius: " + r);
+
+    // Is this path empty? Move to (x0,y0).
+    if (this._x1 === null) {
+      this._ += "M" + x0 + "," + y0;
+    }
+
+    // Or, is (x0,y0) not coincident with the previous point? Line to (x0,y0).
+    else if (Math.abs(this._x1 - x0) > epsilon$1 || Math.abs(this._y1 - y0) > epsilon$1) {
+      this._ += "L" + x0 + "," + y0;
+    }
+
+    // Is this arc empty? We’re done.
+    if (!r) return;
+
+    // Does the angle go the wrong way? Flip the direction.
+    if (da < 0) da = da % tau$1 + tau$1;
+
+    // Is this a complete circle? Draw two arcs to complete the circle.
+    if (da > tauEpsilon) {
+      this._ += "A" + r + "," + r + ",0,1," + cw + "," + (x - dx) + "," + (y - dy) + "A" + r + "," + r + ",0,1," + cw + "," + (this._x1 = x0) + "," + (this._y1 = y0);
+    }
+
+    // Is this arc non-empty? Draw an arc!
+    else if (da > epsilon$1) {
+      this._ += "A" + r + "," + r + ",0," + (+(da >= pi$2)) + "," + cw + "," + (this._x1 = x + r * Math.cos(a1)) + "," + (this._y1 = y + r * Math.sin(a1));
+    }
+  },
+  rect: function(x, y, w, h) {
+    this._ += "M" + (this._x0 = this._x1 = +x) + "," + (this._y0 = this._y1 = +y) + "h" + (+w) + "v" + (+h) + "h" + (-w) + "Z";
+  },
+  toString: function() {
+    return this._;
+  }
+};
 
 var prefix = "$";
 
@@ -3019,6 +3415,78 @@ function map(object, f) {
   else if (object) for (var key in object) map.set(key, object[key]);
 
   return map;
+}
+
+function nest() {
+  var keys = [],
+      sortKeys = [],
+      sortValues,
+      rollup,
+      nest;
+
+  function apply(array, depth, createResult, setResult) {
+    if (depth >= keys.length) {
+      if (sortValues != null) array.sort(sortValues);
+      return rollup != null ? rollup(array) : array;
+    }
+
+    var i = -1,
+        n = array.length,
+        key = keys[depth++],
+        keyValue,
+        value,
+        valuesByKey = map(),
+        values,
+        result = createResult();
+
+    while (++i < n) {
+      if (values = valuesByKey.get(keyValue = key(value = array[i]) + "")) {
+        values.push(value);
+      } else {
+        valuesByKey.set(keyValue, [value]);
+      }
+    }
+
+    valuesByKey.each(function(values, key) {
+      setResult(result, key, apply(values, depth, createResult, setResult));
+    });
+
+    return result;
+  }
+
+  function entries(map, depth) {
+    if (++depth > keys.length) return map;
+    var array, sortKey = sortKeys[depth - 1];
+    if (rollup != null && depth >= keys.length) array = map.entries();
+    else array = [], map.each(function(v, k) { array.push({key: k, values: entries(v, depth)}); });
+    return sortKey != null ? array.sort(function(a, b) { return sortKey(a.key, b.key); }) : array;
+  }
+
+  return nest = {
+    object: function(array) { return apply(array, 0, createObject, setObject); },
+    map: function(array) { return apply(array, 0, createMap, setMap); },
+    entries: function(array) { return entries(apply(array, 0, createMap, setMap), 0); },
+    key: function(d) { keys.push(d); return nest; },
+    sortKeys: function(order) { sortKeys[keys.length - 1] = order; return nest; },
+    sortValues: function(order) { sortValues = order; return nest; },
+    rollup: function(f) { rollup = f; return nest; }
+  };
+}
+
+function createObject() {
+  return {};
+}
+
+function setObject(object, key, value) {
+  object[key] = value;
+}
+
+function createMap() {
+  return map();
+}
+
+function setMap(map, key, value) {
+  map.set(key, value);
 }
 
 function Set() {}
@@ -3771,17 +4239,17 @@ var formatTypes = {
   "x": function(x) { return Math.round(x).toString(16); }
 };
 
-function identity$1(x) {
+function identity$2(x) {
   return x;
 }
 
 var prefixes = ["y","z","a","f","p","n","µ","m","","k","M","G","T","P","E","Z","Y"];
 
 function formatLocale(locale) {
-  var group = locale.grouping && locale.thousands ? formatGroup(locale.grouping, locale.thousands) : identity$1,
+  var group = locale.grouping && locale.thousands ? formatGroup(locale.grouping, locale.thousands) : identity$2,
       currency = locale.currency,
       decimal = locale.decimal,
-      numerals = locale.numerals ? formatNumerals(locale.numerals) : identity$1,
+      numerals = locale.numerals ? formatNumerals(locale.numerals) : identity$2,
       percent = locale.percent || "%";
 
   function newFormat(specifier) {
@@ -4012,7 +4480,7 @@ function initRange(domain, range) {
 var array$1 = Array.prototype;
 
 var map$1 = array$1.map;
-var slice = array$1.slice;
+var slice$1 = array$1.slice;
 
 var implicit = {name: "implicit"};
 
@@ -4040,7 +4508,7 @@ function ordinal() {
   };
 
   scale.range = function(_) {
-    return arguments.length ? (range = slice.call(_), scale) : range.slice();
+    return arguments.length ? (range = slice$1.call(_), scale) : range.slice();
   };
 
   scale.unknown = function(_) {
@@ -4141,13 +4609,13 @@ function constant$2(x) {
   };
 }
 
-function number(x) {
+function number$1(x) {
   return +x;
 }
 
 var unit = [0, 1];
 
-function identity$2(x) {
+function identity$3(x) {
   return x;
 }
 
@@ -4211,7 +4679,7 @@ function transformer() {
       transform,
       untransform,
       unknown,
-      clamp = identity$2,
+      clamp = identity$3,
       piecewise,
       output,
       input;
@@ -4231,19 +4699,19 @@ function transformer() {
   };
 
   scale.domain = function(_) {
-    return arguments.length ? (domain = map$1.call(_, number), clamp === identity$2 || (clamp = clamper(domain)), rescale()) : domain.slice();
+    return arguments.length ? (domain = map$1.call(_, number$1), clamp === identity$3 || (clamp = clamper(domain)), rescale()) : domain.slice();
   };
 
   scale.range = function(_) {
-    return arguments.length ? (range = slice.call(_), rescale()) : range.slice();
+    return arguments.length ? (range = slice$1.call(_), rescale()) : range.slice();
   };
 
   scale.rangeRound = function(_) {
-    return range = slice.call(_), interpolate = interpolateRound, rescale();
+    return range = slice$1.call(_), interpolate = interpolateRound, rescale();
   };
 
   scale.clamp = function(_) {
-    return arguments.length ? (clamp = _ ? clamper(domain) : identity$2, scale) : clamp !== identity$2;
+    return arguments.length ? (clamp = _ ? clamper(domain) : identity$3, scale) : clamp !== identity$3;
   };
 
   scale.interpolate = function(_) {
@@ -4348,7 +4816,7 @@ function linearish(scale) {
 }
 
 function linear$1() {
-  var scale = continuous(identity$2, identity$2);
+  var scale = continuous(identity$3, identity$3);
 
   scale.copy = function() {
     return copy(scale, linear$1());
@@ -4357,6 +4825,25 @@ function linear$1() {
   initRange.apply(scale, arguments);
 
   return linearish(scale);
+}
+
+function nice(domain, interval) {
+  domain = domain.slice();
+
+  var i0 = 0,
+      i1 = domain.length - 1,
+      x0 = domain[i0],
+      x1 = domain[i1],
+      t;
+
+  if (x1 < x0) {
+    t = i0, i0 = i1, i1 = t;
+    t = x0, x0 = x1, x1 = t;
+  }
+
+  domain[i0] = interval.floor(x0);
+  domain[i1] = interval.ceil(x1);
+  return domain;
 }
 
 var t0$1 = new Date,
@@ -5303,13 +5790,141 @@ var parseIso = +new Date("2000-01-01T00:00:00.000Z")
     ? parseIsoNative
     : utcParse(isoSpecifier);
 
+var durationSecond$1 = 1000,
+    durationMinute$1 = durationSecond$1 * 60,
+    durationHour$1 = durationMinute$1 * 60,
+    durationDay$1 = durationHour$1 * 24,
+    durationWeek$1 = durationDay$1 * 7,
+    durationMonth = durationDay$1 * 30,
+    durationYear = durationDay$1 * 365;
+
+function date$1(t) {
+  return new Date(t);
+}
+
+function number$2(t) {
+  return t instanceof Date ? +t : +new Date(+t);
+}
+
+function calendar(year, month, week, day, hour, minute, second, millisecond, format) {
+  var scale = continuous(identity$3, identity$3),
+      invert = scale.invert,
+      domain = scale.domain;
+
+  var formatMillisecond = format(".%L"),
+      formatSecond = format(":%S"),
+      formatMinute = format("%I:%M"),
+      formatHour = format("%I %p"),
+      formatDay = format("%a %d"),
+      formatWeek = format("%b %d"),
+      formatMonth = format("%B"),
+      formatYear = format("%Y");
+
+  var tickIntervals = [
+    [second,  1,      durationSecond$1],
+    [second,  5,  5 * durationSecond$1],
+    [second, 15, 15 * durationSecond$1],
+    [second, 30, 30 * durationSecond$1],
+    [minute,  1,      durationMinute$1],
+    [minute,  5,  5 * durationMinute$1],
+    [minute, 15, 15 * durationMinute$1],
+    [minute, 30, 30 * durationMinute$1],
+    [  hour,  1,      durationHour$1  ],
+    [  hour,  3,  3 * durationHour$1  ],
+    [  hour,  6,  6 * durationHour$1  ],
+    [  hour, 12, 12 * durationHour$1  ],
+    [   day,  1,      durationDay$1   ],
+    [   day,  2,  2 * durationDay$1   ],
+    [  week,  1,      durationWeek$1  ],
+    [ month,  1,      durationMonth ],
+    [ month,  3,  3 * durationMonth ],
+    [  year,  1,      durationYear  ]
+  ];
+
+  function tickFormat(date) {
+    return (second(date) < date ? formatMillisecond
+        : minute(date) < date ? formatSecond
+        : hour(date) < date ? formatMinute
+        : day(date) < date ? formatHour
+        : month(date) < date ? (week(date) < date ? formatDay : formatWeek)
+        : year(date) < date ? formatMonth
+        : formatYear)(date);
+  }
+
+  function tickInterval(interval, start, stop, step) {
+    if (interval == null) interval = 10;
+
+    // If a desired tick count is specified, pick a reasonable tick interval
+    // based on the extent of the domain and a rough estimate of tick size.
+    // Otherwise, assume interval is already a time interval and use it.
+    if (typeof interval === "number") {
+      var target = Math.abs(stop - start) / interval,
+          i = bisector(function(i) { return i[2]; }).right(tickIntervals, target);
+      if (i === tickIntervals.length) {
+        step = tickStep(start / durationYear, stop / durationYear, interval);
+        interval = year;
+      } else if (i) {
+        i = tickIntervals[target / tickIntervals[i - 1][2] < tickIntervals[i][2] / target ? i - 1 : i];
+        step = i[1];
+        interval = i[0];
+      } else {
+        step = Math.max(tickStep(start, stop, interval), 1);
+        interval = millisecond;
+      }
+    }
+
+    return step == null ? interval : interval.every(step);
+  }
+
+  scale.invert = function(y) {
+    return new Date(invert(y));
+  };
+
+  scale.domain = function(_) {
+    return arguments.length ? domain(map$1.call(_, number$2)) : domain().map(date$1);
+  };
+
+  scale.ticks = function(interval, step) {
+    var d = domain(),
+        t0 = d[0],
+        t1 = d[d.length - 1],
+        r = t1 < t0,
+        t;
+    if (r) t = t0, t0 = t1, t1 = t;
+    t = tickInterval(interval, t0, t1, step);
+    t = t ? t.range(t0, t1 + 1) : []; // inclusive stop
+    return r ? t.reverse() : t;
+  };
+
+  scale.tickFormat = function(count, specifier) {
+    return specifier == null ? tickFormat : format(specifier);
+  };
+
+  scale.nice = function(interval, step) {
+    var d = domain();
+    return (interval = tickInterval(interval, d[0], d[d.length - 1], step))
+        ? domain(nice(d, interval))
+        : scale;
+  };
+
+  scale.copy = function() {
+    return copy(scale, calendar(year, month, week, day, hour, minute, second, millisecond, format));
+  };
+
+  return scale;
+}
+
+function time() {
+  return initRange.apply(calendar(year, month, sunday, day, hour, minute, second, millisecond, timeFormat).domain([new Date(2000, 0, 1), new Date(2000, 0, 2)]), arguments);
+}
+
 function colors(specifier) {
   var n = specifier.length / 6 | 0, colors = new Array(n), i = 0;
   while (i < n) colors[i] = "#" + specifier.slice(i * 6, ++i * 6);
   return colors;
 }
 
-colors("1f77b4ff7f0e2ca02cd627289467bd8c564be377c27f7f7fbcbd2217becf");
+var category10 = colors("1f77b4ff7f0e2ca02cd627289467bd8c564be377c27f7f7fbcbd2217becf");
 
 colors("7fc97fbeaed4fdc086ffff99386cb0f0027fbf5b17666666");
 
@@ -5700,7 +6315,104 @@ var inferno = ramp$1(colors("00000401000501010601010802010a02020c02020e030210040
 
 var plasma = ramp$1(colors("0d088710078813078916078a19068c1b068d1d068e20068f2206902406912605912805922a05932c05942e05952f059631059733059735049837049938049a3a049a3c049b3e049c3f049c41049d43039e44039e46039f48039f4903a04b03a14c02a14e02a25002a25102a35302a35502a45601a45801a45901a55b01a55c01a65e01a66001a66100a76300a76400a76600a76700a86900a86a00a86c00a86e00a86f00a87100a87201a87401a87501a87701a87801a87a02a87b02a87d03a87e03a88004a88104a78305a78405a78606a68707a68808a68a09a58b0aa58d0ba58e0ca48f0da4910ea3920fa39410a29511a19613a19814a099159f9a169f9c179e9d189d9e199da01a9ca11b9ba21d9aa31e9aa51f99a62098a72197a82296aa2395ab2494ac2694ad2793ae2892b02991b12a90b22b8fb32c8eb42e8db52f8cb6308bb7318ab83289ba3388bb3488bc3587bd3786be3885bf3984c03a83c13b82c23c81c33d80c43e7fc5407ec6417dc7427cc8437bc9447aca457acb4679cc4778cc4977cd4a76ce4b75cf4c74d04d73d14e72d24f71d35171d45270d5536fd5546ed6556dd7566cd8576bd9586ada5a6ada5b69db5c68dc5d67dd5e66de5f65de6164df6263e06363e16462e26561e26660e3685fe4695ee56a5de56b5de66c5ce76e5be76f5ae87059e97158e97257ea7457eb7556eb7655ec7754ed7953ed7a52ee7b51ef7c51ef7e50f07f4ff0804ef1814df1834cf2844bf3854bf3874af48849f48948f58b47f58c46f68d45f68f44f79044f79143f79342f89441f89540f9973ff9983ef99a3efa9b3dfa9c3cfa9e3bfb9f3afba139fba238fca338fca537fca636fca835fca934fdab33fdac33fdae32fdaf31fdb130fdb22ffdb42ffdb52efeb72dfeb82cfeba2cfebb2bfebd2afebe2afec029fdc229fdc328fdc527fdc627fdc827fdca26fdcb26fccd25fcce25fcd025fcd225fbd324fbd524fbd724fad824fada24f9dc24f9dd25f8df25f8e125f7e225f7e425f6e626f6e826f5e926f5eb27f4ed27f3ee27f3f027f2f227f1f426f1f525f0f724f0f921"));
 
+function constant$3(x) {
+  return function constant() {
+    return x;
+  };
+}
+
 var pi$4 = Math.PI;
+
+function Linear(context) {
+  this._context = context;
+}
+
+Linear.prototype = {
+  areaStart: function() {
+    this._line = 0;
+  },
+  areaEnd: function() {
+    this._line = NaN;
+  },
+  lineStart: function() {
+    this._point = 0;
+  },
+  lineEnd: function() {
+    if (this._line || (this._line !== 0 && this._point === 1)) this._context.closePath();
+    this._line = 1 - this._line;
+  },
+  point: function(x, y) {
+    x = +x, y = +y;
+    switch (this._point) {
+      case 0: this._point = 1; this._line ? this._context.lineTo(x, y) : this._context.moveTo(x, y); break;
+      case 1: this._point = 2; // proceed
+      default: this._context.lineTo(x, y); break;
+    }
+  }
+};
+
+function curveLinear(context) {
+  return new Linear(context);
+}
+
+function x(p) {
+  return p[0];
+}
+
+function y(p) {
+  return p[1];
+}
+
+function line() {
+  var x$1 = x,
+      y$1 = y,
+      defined = constant$3(true),
+      context = null,
+      curve = curveLinear,
+      output = null;
+
+  function line(data) {
+    var i,
+        n = data.length,
+        d,
+        defined0 = false,
+        buffer;
+
+    if (context == null) output = curve(buffer = path());
+
+    for (i = 0; i <= n; ++i) {
+      if (!(i < n && defined(d = data[i], i, data)) === defined0) {
+        if (defined0 = !defined0) output.lineStart();
+        else output.lineEnd();
+      }
+      if (defined0) output.point(+x$1(d, i, data), +y$1(d, i, data));
+    }
+
+    if (buffer) return output = null, buffer + "" || null;
+  }
+
+  line.x = function(_) {
+    return arguments.length ? (x$1 = typeof _ === "function" ? _ : constant$3(+_), line) : x$1;
+  };
+
+  line.y = function(_) {
+    return arguments.length ? (y$1 = typeof _ === "function" ? _ : constant$3(+_), line) : y$1;
+  };
+
+  line.defined = function(_) {
+    return arguments.length ? (defined = typeof _ === "function" ? _ : constant$3(!!_), line) : defined;
+  };
+
+  line.curve = function(_) {
+    return arguments.length ? (curve = _, context != null && (output = curve(context)), line) : curve;
+  };
+
+  line.context = function(_) {
+    return arguments.length ? (_ == null ? context = output = null : output = curve(context = _), line) : context;
+  };
+
+  return line;
+}
 
 function sign(x) {
   return x < 0 ? -1 : 1;
@@ -5728,7 +6440,7 @@ function slope2(that, t) {
 // According to https://en.wikipedia.org/wiki/Cubic_Hermite_spline#Representations
 // "you can express cubic Hermite interpolation in terms of cubic Bézier curves
 // with respect to the four values p0, p0 + m0 / 3, p1 - m1 / 3, p1".
-function point(that, t0, t1) {
+function point$1(that, t0, t1) {
   var x0 = that._x0,
       y0 = that._y0,
       x1 = that._x1,
@@ -5757,7 +6469,7 @@ MonotoneX.prototype = {
   lineEnd: function() {
     switch (this._point) {
       case 2: this._context.lineTo(this._x1, this._y1); break;
-      case 3: point(this, this._t0, slope2(this, this._t0)); break;
+      case 3: point$1(this, this._t0, slope2(this, this._t0)); break;
     }
     if (this._line || (this._line !== 0 && this._point === 1)) this._context.closePath();
     this._line = 1 - this._line;
@@ -5770,8 +6482,8 @@ MonotoneX.prototype = {
     switch (this._point) {
       case 0: this._point = 1; this._line ? this._context.lineTo(x, y) : this._context.moveTo(x, y); break;
       case 1: this._point = 2; break;
-      case 2: this._point = 3; point(this, slope2(this, t1 = slope3(this, x, y)), t1); break;
-      default: point(this, this._t0, t1 = slope3(this, x, y)); break;
+      case 2: this._point = 3; point$1(this, slope2(this, t1 = slope3(this, x, y)), t1); break;
+      default: point$1(this, this._t0, t1 = slope3(this, x, y)); break;
     }
 
     this._x0 = this._x1, this._x1 = x;
@@ -22938,12 +23650,12 @@ var VerticalBarChart = /** @class */ (function () {
         this.defaultConfig = { container: '',
             data: [],
             chartWidth: 960,
-            chartHeight: 146 };
+            chartHeight: 146,
+            loading: false };
         this.config = this.defaultConfig;
         this.yLabelsWidth = 230;
         this.withYLabels = true;
         this.chartId = 'verticalbarchart';
-        this.loading = false;
         this.xDomainMin = 0;
         this.xDomainMax = 0;
         this.labelX = '';
@@ -22959,7 +23671,7 @@ var VerticalBarChart = /** @class */ (function () {
         window.addEventListener('resize', function () { return _this.redraw(); });
         selectAll("div.zippy-chart-tooltip " + this.chartId).remove();
         select(this.container)
-            .transition().duration(100).style('opacity', this.loading ? '0.5' : '1');
+            .transition().duration(100).style('opacity', this.config.loading ? '0.5' : '1');
         this.redraw();
     };
     VerticalBarChart.prototype.redraw = function () {
@@ -23157,4 +23869,550 @@ var VerticalBarChart = /** @class */ (function () {
     return VerticalBarChart;
 }());
 
+var MultiLineChartTimeScale;
+(function (MultiLineChartTimeScale) {
+    MultiLineChartTimeScale["Month"] = "Month";
+    MultiLineChartTimeScale["Quarter"] = "Quarter";
+    MultiLineChartTimeScale["FQJuly"] = "FQ (July)";
+    MultiLineChartTimeScale["FQSeptember"] = "FQ (September)";
+    MultiLineChartTimeScale["FQOctober"] = "FQ (October)";
+    MultiLineChartTimeScale["Biannual"] = "Biannual";
+    MultiLineChartTimeScale["Year"] = "Year";
+    MultiLineChartTimeScale["FYJuly"] = "FY (July)";
+    MultiLineChartTimeScale["FYSeptember"] = "FY (September)";
+    MultiLineChartTimeScale["FYOctober"] = "FY (October)";
+})(MultiLineChartTimeScale || (MultiLineChartTimeScale = {}));
+
+/**
+ * Vertical bar chart
+ *
+ */
+var MultiLineChart = /** @class */ (function () {
+    function MultiLineChart(config) {
+        this.defaultConfig = { container: '',
+            data: [],
+            chartWidth: 960,
+            chartHeight: 146,
+            timeScale: MultiLineChartTimeScale.Month };
+        this.config = this.defaultConfig;
+        this.chartId = 'multilinechart';
+        this.config = lodash_2(this.config, config);
+        this.container = this.config.container;
+        this.dataInternal = config.data;
+        this.init();
+    }
+    MultiLineChart.prototype.init = function () {
+        var _this = this;
+        // TODO: use element offsetWidth to update actual width( resize as config option)
+        window.addEventListener('resize', function () { return _this.redraw(); });
+        selectAll("div.zippy-chart-tooltip " + this.chartId).remove();
+        select(this.container)
+            .transition().duration(100).style('opacity', this.config.loading ? '0.5' : '1');
+        this.redraw();
+    };
+    MultiLineChart.prototype.testF = function () {
+        var data = [
+            {
+                name: "USA",
+                values: [
+                    { date: "2000", price: 100 },
+                    { date: "2001", price: 110 },
+                    { date: "2002", price: 145 },
+                    { date: "2003", price: 241 },
+                    { date: "2004", price: 101 },
+                    { date: "2005", price: 90 },
+                    { date: "2006", price: 10 },
+                    { date: "2007", price: 35 },
+                    { date: "2008", price: 21 },
+                    { date: "2009", price: 201 }
+                ]
+            },
+            {
+                name: "Canada",
+                values: [
+                    { date: "2000", price: 200 },
+                    { date: "2001", price: 120 },
+                    { date: "2002", price: 33 },
+                    { date: "2003", price: 21 },
+                    { date: "2004", price: 51 },
+                    { date: "2005", price: 190 },
+                    { date: "2006", price: 120 },
+                    { date: "2007", price: 85 },
+                    { date: "2008", price: 221 },
+                    { date: "2009", price: 101 }
+                ]
+            }
+        ];
+        var width = 500;
+        var height = 300;
+        var margin = 50;
+        var duration = 250;
+        var lineOpacity = "0.25";
+        var lineOpacityHover = "0.85";
+        var otherLinesOpacityHover = "0.1";
+        var lineStroke = "1.5px";
+        var lineStrokeHover = "2.5px";
+        var circleOpacity = '0.85';
+        var circleOpacityOnLineHover = "0.25";
+        var circleRadius = 3;
+        var circleRadiusHover = 6;
+        /* Format Data */
+        var parseDate = timeParse("%Y");
+        data.forEach(function (d) {
+            d.values.forEach(function (d) {
+                d.date = parseDate(d.date);
+                d.price = +d.price;
+            });
+        });
+        /* Scale */
+        var xScale = time()
+            .domain(extent(data[0].values, function (d) { return d.date; }))
+            .range([0, width - margin]);
+        var yScale = linear$1()
+            .domain([0, max(data[0].values, function (d) { return d.price; })])
+            .range([height - margin, 0]);
+        var color = ordinal(category10);
+        /* Add SVG */
+        var svg = select("#chart").append("svg")
+            .attr("width", (width + margin) + "px")
+            .attr("height", (height + margin) + "px")
+            .append('g')
+            .attr("transform", "translate(" + margin + ", " + margin + ")");
+        /* Add line into SVG */
+        var line$1 = line()
+            .x(function (d) { return xScale(d.date); })
+            .y(function (d) { return yScale(d.price); });
+        var lines = svg.append('g')
+            .attr('class', 'lines');
+        lines.selectAll('.line-group')
+            .data(data).enter()
+            .append('g')
+            .attr('class', 'line-group')
+            .on("mouseover", function (d, i) {
+            svg.append("text")
+                .attr("class", "title-text")
+                .style("fill", color(i))
+                .text(d.name)
+                .attr("text-anchor", "middle")
+                .attr("x", (width - margin) / 2)
+                .attr("y", 5);
+        })
+            .on("mouseout", function (d) {
+            svg.select(".title-text").remove();
+        })
+            .append('path')
+            .attr('class', 'line')
+            .attr('d', function (d) { return line$1(d.values); })
+            .style('stroke', function (d, i) { return color(i); })
+            .style('opacity', lineOpacity)
+            .on("mouseover", function (d) {
+            selectAll('.line')
+                .style('opacity', otherLinesOpacityHover);
+            selectAll('.circle')
+                .style('opacity', circleOpacityOnLineHover);
+            select(this)
+                .style('opacity', lineOpacityHover)
+                .style("stroke-width", lineStrokeHover)
+                .style("cursor", "pointer");
+        })
+            .on("mouseout", function (d) {
+            selectAll(".line")
+                .style('opacity', lineOpacity);
+            selectAll('.circle')
+                .style('opacity', circleOpacity);
+            select(this)
+                .style("stroke-width", lineStroke)
+                .style("cursor", "none");
+        });
+        /* Add circles in the line */
+        lines.selectAll("circle-group")
+            .data(data).enter()
+            .append("g")
+            .style("fill", function (d, i) { return color(i); })
+            .selectAll("circle")
+            .data(function (d) { return d.values; }).enter()
+            .append("g")
+            .attr("class", "circle")
+            .on("mouseover", function (d) {
+            select(this)
+                .style("cursor", "pointer")
+                .append("text")
+                .attr("class", "text")
+                .text("" + d.price)
+                .attr("x", function (d) { return xScale(d.date) + 5; })
+                .attr("y", function (d) { return yScale(d.price) - 10; });
+        })
+            .on("mouseout", function (d) {
+            select(this)
+                .style("cursor", "none")
+                .transition()
+                .duration(duration)
+                .selectAll(".text").remove();
+        })
+            .append("circle")
+            .attr("cx", function (d) { return xScale(d.date); })
+            .attr("cy", function (d) { return yScale(d.price); })
+            .attr("r", circleRadius)
+            .style('opacity', circleOpacity)
+            .on("mouseover", function (d) {
+            select(this)
+                .transition()
+                .duration(duration)
+                .attr("r", circleRadiusHover);
+        })
+            .on("mouseout", function (d) {
+            select(this)
+                .transition()
+                .duration(duration)
+                .attr("r", circleRadius);
+        });
+        /* Add Axis into SVG */
+        var xAxis = axisBottom(xScale).ticks(5);
+        var yAxis = axisLeft(yScale).ticks(5);
+        svg.append("g")
+            .attr("class", "x axis")
+            .attr("transform", "translate(0, " + (height - margin) + ")")
+            .call(xAxis);
+        svg.append("g")
+            .attr("class", "y axis")
+            .call(yAxis)
+            .append('text')
+            .attr("y", 15)
+            .attr("transform", "rotate(-90)")
+            .attr("fill", "#000")
+            .text("Total values");
+    };
+    MultiLineChart.prototype.redraw = function () {
+        var chartId = this.chartId;
+        var timeScale = this.config.timeScale;
+        var defaultTooltipWidth = 60;
+        var data = this.dataInternal;
+        select('svg#' + chartId).remove();
+        if (data.length === 0) {
+            return;
+        }
+        // Set the dimensions of the canvas / graph
+        var margin = { top: 70, right: 40, bottom: 30, left: 55 }, width = this.config.chartWidth - margin.left - margin.right, height = this.config.chartHeight - margin.top - margin.bottom;
+        // set the ranges
+        var x = time().range([0, width]);
+        var y = linear$1().range([height, 0]);
+        // Define the line
+        var chartLine = line()
+            .x(function (d) { return x(d.valueX); })
+            .y(function (d) { return y(d.valueY); });
+        var tooltipContainer = select('body').append('div')
+            .attr('class', 'd3-multilinechart-tooltip')
+            .style('opacity', 0);
+        // Adds the svg canvas
+        var svg = select(this.container)
+            .append('svg')
+            .attr('id', chartId)
+            .attr('style', 'font-family: \'Lucida Grande\', \'Open Sans\', sans-serif; font-size: 12px; fill: #4a4a4a;')
+            .attr('width', width + margin.left + margin.right)
+            .attr('height', height + margin.top + margin.bottom)
+            .append('g')
+            .attr('transform', 'translate(' + margin.left + ',' + margin.top + ')');
+        // Scale the range of the data
+        x.domain(extent(data, function (d) { return d.valueX; }));
+        y.domain(extent(data, function (d) { return d.valueY; })).nice(5);
+        // Nest the entries by symbol
+        var dataNest = nest()
+            .key(function (d) { return d.label; })
+            .entries(data);
+        // set the colour scale
+        var color = ordinal(category10);
+        // Add the X Axis with grid
+        svg.append('g')
+            .attr('style', 'fill: #4a4a4a;')
+            .attr('class', 'axis grid')
+            .attr('transform', 'translate(0,' + height + ')')
+            .call(axisBottom(x).tickSizeOuter(0).tickSize(-height).tickPadding(10)
+            .tickValues(getXAxisTickValues())
+            .tickFormat(tickFormat));
+        // Add the Y Axis  with grid
+        // do it twice as a trick to get proper grid
+        svg.append('g')
+            .attr('style', 'fill: #4a4a4a;')
+            .attr('class', 'axis grid')
+            .call(axisLeft(y).tickSize(30).tickFormat(function () { return ''; }));
+        svg.append('g')
+            .attr('style', 'fill: #4a4a4a;')
+            .attr('class', 'axis grid')
+            .call(axisLeft(y).tickPadding(32).tickSize(-width - 30));
+        // add styles
+        svg.selectAll('.grid .domain').attr('style', 'display: none');
+        svg.selectAll('.grid .tick').attr('style', 'font-family: \'Lucida Grande\', \'Open Sans\', sans-serif;font-size: 12px;');
+        svg.selectAll('.grid .tick line').attr('style', 'stroke: #eee;');
+        // Loop through nest
+        var legendOffsetX = -30;
+        var legendOffsetY = -10;
+        var legendLineNumber = 1;
+        dataNest.forEach(function (nest, index) {
+            var pathId = nest.key.replace(/[^a-zA-Z0-9]+/g, '');
+            // Add the scatterplot, by default invisible
+            var dotsX = [];
+            var dots = svg.selectAll('dot')
+                .data(nest.values)
+                .enter()
+                .append('circle')
+                .attr('r', 3)
+                .style('opacity', nest.values.length === 1 ? '1' : '0')
+                .style('fill', getColor(nest))
+                .attr('cx', function (dot) {
+                dotsX.push(x(dot.valueX)); // save X coordinates for furher mousemove calc
+                return x(dot.valueX);
+            })
+                .attr('cy', function (dot) { return y(dot.valueY); })
+                .on('mouseover', function (dot) {
+                showTooltip(dot);
+                select(this)
+                    .style('opacity', '1');
+            })
+                .on('mouseout', function () {
+                select(this).style('opacity', nest.values.length === 1 ? '1' : '0');
+                tooltipContainer.style('opacity', 0);
+            });
+            // add transparent path for mouse event
+            svg.append('path')
+                .attr('d', function () { return chartLine(nest.values); })
+                .style('stroke-width', '15')
+                .style('fill', 'none')
+                .style('stroke', 'steelblue')
+                .style('opacity', 0)
+                .on('mousemove', function () {
+                // show nearest dot on chart with relative tooltip
+                var mouseX = mouse(svg.node())[0];
+                var c = 1e10;
+                var idx = -1;
+                dotsX.forEach(function (dotX, dotIndex) {
+                    var dis = Math.abs(dotX - mouseX);
+                    if (dis < c) {
+                        c = dis;
+                        idx = dotIndex;
+                    }
+                });
+                dots.nodes().forEach(function (value, index) {
+                    var opacity = index === idx ? 1 : 0;
+                    select(value).style('opacity', opacity);
+                });
+                showTooltip(nest.values[idx]);
+            })
+                .on('mouseout', function () {
+                // hide all dots
+                dots.style('opacity', 0);
+                // hide tooltip
+                tooltipContainer.style('opacity', 0);
+            });
+            // visual lines
+            svg.append('path')
+                .attr('class', 'visible-line')
+                .style('stroke-width', 2)
+                .style('fill', 'none')
+                .style('stroke', function () {
+                return nest.color = getColor(nest);
+            })
+                .attr('id', 'tag' + pathId) // assign an ID
+                .attr('d', function () { return chartLine(nest.values); });
+            var maxY = max(nest.values, function (chartNode) { return chartNode.valueY; });
+            var minY = min(nest.values, function (chartNode) { return chartNode.valueY; });
+            svg.append('g').selectAll('text')
+                .data(nest.values.filter(function (value) { return value.valueY === maxY || value.valueY === minY; }))
+                .enter()
+                .append('text')
+                .style('font-family', '\'Lucida Grande\', \'Open Sans\', sans-serif')
+                .style('font-size', '12px')
+                .style('fill', '#4a4a4a')
+                .attr('class', 'max-min')
+                .attr('id', 'tag' + pathId)
+                .attr('x', function (value) { return x(value.valueX) - value.valueY.toFixed(1).length / 2 * 5; })
+                .attr('y', function (value) { return y(value.valueY) + (maxY === value.valueY ? -2 : 12); })
+                .text(function (value) { return value.valueY.toFixed(1); });
+            if (legendLineNumber <= 3) {
+                // Add the Legend
+                var legendText = '● ' + nest.values[0].lineLabel;
+                svg.append('text')
+                    .attr('x', legendOffsetX) // space legend
+                    .attr('y', -(margin.top / 2) + legendOffsetY)
+                    .attr('class', 'legend legendOffset' + legendOffsetY) // style the legend
+                    .style('font-family', '\'Lucida Grande\', \'Open Sans\', sans-serif')
+                    .style('font-size', '12px')
+                    .style('font-weight', 'bold')
+                    .style('cursor', 'pointer')
+                    .style('fill', '#4a4a4a')
+                    .style('fill', function () {
+                    return nest.color = getColor(nest);
+                })
+                    .on('mouseover', function () {
+                    select(this).style('text-decoration', 'underline');
+                    selectAll('path.visible-line,text.max-min')
+                        .filter(':not(#tag' + pathId + ')')
+                        .style('opacity', 0.3);
+                })
+                    .on('mouseout', function () {
+                    select(this).style('text-decoration', 'none');
+                    selectAll('path.visible-line,text.max-min')
+                        .style('opacity', 1);
+                })
+                    .text(legendText);
+                // get offset for next legend text // TODO: move to function
+                var legendNodes = selectAll('text.legend.legendOffset' + legendOffsetY).nodes();
+                var currentLegendLength = legendNodes.reduce(function (a, v) {
+                    return a + v.getComputedTextLength() + 10;
+                }, null);
+                legendOffsetX = currentLegendLength - 30;
+                if ((width - legendOffsetX) < 100) {
+                    legendLineNumber++;
+                    legendOffsetY += 20;
+                    legendOffsetX = -30;
+                }
+                if (legendLineNumber > 3 && dataNest[index + 1]) {
+                    select(legendNodes[legendNodes.length - 1])
+                        .style('fill', '#4a4a4a')
+                        .style('cursor', 'default')
+                        .on('mouseover', function () { })
+                        .on('mouseout', function () { })
+                        .text('...');
+                }
+            }
+        });
+        function getColor(d) {
+            return d.values[0].color ? d.values[0].color : color(d.key);
+        }
+        function showTooltip(item) {
+            var tooltipWidht = item.tooltip.width ? item.tooltip.width : defaultTooltipWidth;
+            var screenWidht = event.view.innerWidth;
+            var position = event.pageX;
+            var left = position;
+            if ((position + tooltipWidht) > screenWidht) {
+                left = screenWidht - tooltipWidht;
+            }
+            tooltipContainer.html(item.tooltip.html.replace(/{period_scale}/g, tickFormat(item.valueX)))
+                .style('left', left + 'px')
+                .style('opacity', 1)
+                .style('top', (event.pageY + 5) + 'px'); // TODO: calculate top in the same way as left
+        }
+        // get axis values according to first and last date in data
+        // truncate long set of values to make it readable on chart
+        function getXAxisTickValues() {
+            var timeScaleIncrement = 1;
+            switch (timeScale) {
+                case 'Month':
+                    timeScaleIncrement = 1;
+                    break;
+                case 'Quarter':
+                case 'FQ (July)':
+                case 'FQ (September)':
+                case 'FQ (October)':
+                    timeScaleIncrement = 3;
+                    break;
+                case 'Biannual':
+                    timeScaleIncrement = 6;
+                    break;
+                case 'Year':
+                case 'FY (July)':
+                case 'FY (September)':
+                case 'FY (October)':
+                    timeScaleIncrement = 12;
+                    break;
+            }
+            var allValues = [];
+            var truncValues = [];
+            var dateRange = extent(data, function (d) { return d.valueX; });
+            var currDate = new Date(dateRange[0].getTime());
+            while (currDate <= dateRange[1]) {
+                allValues.push(new Date(currDate.getTime()));
+                currDate.setMonth(currDate.getMonth() + timeScaleIncrement);
+            }
+            var maxVal = 16;
+            if (allValues.length >= maxVal) {
+                var delta = Math.floor(allValues.length / maxVal);
+                console.log(allValues.length, delta);
+                for (var i = allValues.length - 1; i > 0; i = i - 1 - delta) {
+                    if (allValues[i]) {
+                        truncValues.unshift(allValues[i]);
+                    }
+                }
+                return truncValues;
+            }
+            return allValues;
+        }
+        function tickFormat(date) {
+            var ret;
+            var currentMonth = date.getMonth() + 1;
+            switch (timeScale) {
+                case 'Month':
+                    ret = timeFormat('%b %Y')(date);
+                    break;
+                case 'Quarter':
+                    var quarter = (Math.ceil((date.getMonth() + 1) / 3));
+                    ret = 'Q' + quarter + timeFormat(' %Y')(date);
+                    break;
+                case 'FQ (July)':
+                    var fqjQuarter = 2;
+                    if (currentMonth < 4) {
+                        fqjQuarter = 3;
+                    }
+                    else if (currentMonth < 7) {
+                        fqjQuarter = 4;
+                    }
+                    else if (currentMonth < 10) {
+                        fqjQuarter = 1;
+                    }
+                    ret = 'Q' + fqjQuarter + ' ' + (date.getFullYear() + ((fqjQuarter === 1 || fqjQuarter === 2) ? 1 : 0));
+                    break;
+                case 'FQ (September)':
+                    var fqsQuarter = 1;
+                    if (currentMonth < 3 || currentMonth > 11) {
+                        fqsQuarter = 2;
+                    }
+                    else if (currentMonth < 6) {
+                        fqsQuarter = 3;
+                    }
+                    else if (currentMonth < 9) {
+                        fqsQuarter = 4;
+                    }
+                    ret = 'Q' + fqsQuarter + ' ' + (date.getFullYear() + ((fqsQuarter === 1 || fqsQuarter === 2) ? 1 : 0));
+                    break;
+                case 'FQ (October)':
+                    var fqoQuarter = 1;
+                    if (currentMonth < 4) {
+                        fqoQuarter = 2;
+                    }
+                    else if (currentMonth < 7) {
+                        fqoQuarter = 3;
+                    }
+                    else if (currentMonth < 10) {
+                        fqoQuarter = 4;
+                    }
+                    ret = 'Q' + fqoQuarter + ' ' + (date.getFullYear() + ((fqoQuarter === 1) ? 1 : 0));
+                    break;
+                case 'Biannual':
+                    var intDate = new Date(date.getTime());
+                    ret = timeFormat('%b')(intDate) +
+                        timeFormat('-%b')(new Date(intDate.setMonth(intDate.getMonth() + 5)))
+                        + ' ' + timeFormat(' %Y')(intDate);
+                    break;
+                case 'Year':
+                    ret = timeFormat('%Y')(date);
+                    break;
+                case 'FY (July)':
+                    ret = (date.getFullYear() + ((currentMonth > 6) ? 1 : 0)).toString();
+                    break;
+                case 'FY (September)':
+                    ret = (date.getFullYear() + ((currentMonth > 8) ? 1 : 0)).toString();
+                    break;
+                case 'FY (October)':
+                    ret = (date.getFullYear() + ((currentMonth > 9) ? 1 : 0)).toString();
+                    break;
+                default:
+                    ret = timeFormat('%b %d')(date);
+                    break;
+            }
+            return ret;
+        }
+    };
+    return MultiLineChart;
+}());
+
+exports.MultiLineChart = MultiLineChart;
 exports.VerticalBarChart = VerticalBarChart;

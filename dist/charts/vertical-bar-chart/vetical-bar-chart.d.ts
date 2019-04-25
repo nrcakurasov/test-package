@@ -10,7 +10,6 @@ export declare class VerticalBarChart {
     private yLabelsWidth;
     private withYLabels;
     private chartId;
-    private loading;
     private xDomainMin;
     private xDomainMax;
     private labelX;

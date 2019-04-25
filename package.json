@@ -27,6 +27,9 @@
   },
   "homepage": "https://github.com/nrcakurasov/test-package#readme",
   "devDependencies": {
+    "@types/d3": "^5.7.2",
+    "@types/d3-selection": "^1.4.1",
+    "@types/lodash": "^4.14.123",
     "@types/node": "^11.13.0",
     "autoprefixer": "^9.5.1",
     "node-sass": "^4.11.0",
@@ -45,8 +48,6 @@
     "typescript": "^3.4.3"
   },
   "dependencies": {
-    "@types/d3": "^5.7.1",
-    "@types/lodash": "^4.14.123",
     "d3": "^5.9.2",
     "lodash": "^4.17.11"
   }

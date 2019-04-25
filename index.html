@@ -22,14 +22,23 @@ var verticalBarChartConfig =
     {container: '#verticalBarChart',
         data: verticalBarChartData,
         chartWidth: 560,
-        chartHeight: 146
+        chartHeight: 146,
+        loading: false
     };
 
 var verticalBarChart  = new zippyCharts.VerticalBarChart(verticalBarChartConfig);
 
-
 // multiline chart
-//.....
+var MultiLineChartData = [];
+var multiLineChartConfig = 
+    {container: '#multiLineChart',
+        data: MultiLineChartData,
+        chartWidth: 560,
+        chartHeight: 146,
+        loading: true
+    };
+
+var verticalBarChart  = new zippyCharts.MultiLineChart(multiLineChartConfig);
 
 
 </script>    
